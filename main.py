@@ -1,9 +1,17 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from time import sleep 
+from os import system, listdir
+from time import strftime as st
+import json
 
+# Data para criação do nome do novo arquivo
+data_atual = f'{st("%Y")}-{st("%m")}-{st("%d")}-{st("%H")}{st("%M")}'
+tem_novas_vagas = False
 
-local = "taubate"#input("Diga sua cidade: ").strip().lower()
+# Variaveis Globais
+dados_das_vagas = {} # Coleção com todos os Dados Captados
+local = input("Diga sua cidade: ").strip().lower()
 link = f"https://www.infojobs.com.br/vagas-de-emprego-{local}.aspx?page=1&campo=griddate&orden=desc"
 
 # Instancia as opcoes de janela e outros atributos
@@ -12,7 +20,9 @@ options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
 # Instancia o navegador
 driver = webdriver.Edge(options=options)
-driver.get(link)
+
+def iniciar_driver():
+	driver.get(link)
 
 
 def aceitar_cookies():
@@ -45,12 +55,57 @@ def checar_final_pagina(npp):
 		# Caso encontre a frase, retornara falso, dizendo que nao ha mais vagas
 		return frase_final_pagina != frase_final
 
-aceitar_cookies()
+
+def exportar_dados(dados_vaga, nome_arquivo=""):
+	nome_arquivo = f"{data_atual}.json" if nome_arquivo == "" else nome_arquivo
+	# Função responsável por exportar (salvar) a lista de vagas e suas respectivas descrições em um arquivo externo, no formato JSON
+	arquivo = open(nome_arquivo, "w")
+	arquivo.write(json.dumps(dados_vaga, indent=4))
+	arquivo.close()
 
 
+def importar_arquivo(nome_arquivo):
+	arquivo = open(nome_arquivo)
+	saida = arquivo.read() # Abre o arquivo para leitura, em formato string
+	saida = json.loads(saida) # Converte de string para dicionario
+	arquivo.close()
+	return saida
 
-def tratar_dados(dados):
-	print(dados)
+
+def tratar_dados(dados_vaga):
+	global dados_das_vagas
+	# O cargo sempre é exibido no topo do detalhamento da vaga
+	cargo = dados_vaga.split("\n")[0] # Particiona toda a informação e pega apenas o Primeiro item (o cargo)
+
+	# Cria um ID, afinal coleções em forma de dicionario aceitam apenas chaves exclusivas, e podem haver vagas com mesmo nome
+	# se houver uma vaga com mesmo nome e mesma quantidade de caracteres será muita coincidencia (improvável).
+	id_vaga = f"{len(dados_vaga):0>6}_" + cargo.split()[0].upper()
+
+	# Infelizmente o buscador de vagas as vezes retorna a mesma vaga duas vezes, este if garante que a mesma seja tratada apenas uma vez
+	if id_vaga not in dados_das_vagas:
+		print(cargo)
+		dados_das_vagas[id_vaga] = {}
+		dados_das_vagas[id_vaga]["cargo"] = cargo
+		dados_das_vagas[id_vaga]["descricao"] = dados_vaga
+
+
+def verificar_se_tem_vagas_novas(dados_atuais):
+	global tem_novas_vagas # Variável que diz se existem novas vagas
+	# Lista de arquivos de busca anteriores
+	dados_anteriores = [arquivo for arquivo in listdir() if "json" in arquivo][-1]
+	arquivo_anterior = importar_arquivo(dados_anteriores)
+
+	nmr_vagas_novas = 0 # Quantidade de vagas novas (se houverem)
+	vagas_novas = {} # Coleção para novas vagas
+	for id_vaga in dados_atuais.keys():
+		if id_vaga not in arquivo_anterior:
+			nmr_vagas_novas += 1
+			vagas_novas[id_vaga] = dados_atuais[id_vaga]
+	tem_novas_vagas = nmr_vagas_novas > 0
+	if tem_novas_vagas:
+		# Se houverem novas vagas, vai exportar a coleção com elas
+		exportar_dados(vagas_novas, "vagas_novas.json")
+
 
 def buscador_de_vaga():
 	# Loop responsavel por rodar todas as vagas da página
@@ -68,29 +123,98 @@ def buscador_de_vaga():
 				numero_vaga = 1
 				numero_proxima_pagina += 1
 			else:
+				verificar_se_tem_vagas_novas(dados_das_vagas)
+				if tem_novas_vagas:
+					# Caso tenha encontrado novas vagas, irá exportar
+					exportar_dados(dados_das_vagas)
 				break
 		else:
 			# Encontrada a vaga, irá clicar nela para exibir detalhes
-			sleep(0.01)
 			vaga.click()
 			quantidade_de_vagas += 1
-			try:
-				informacoes_da_vaga = driver.find_element(By.XPATH, '/html/body/main/div[2]/form/div/div[2]/div')
-			except:
-				pass
-			else:
-				pass
-				# tratar_dados(informacoes_da_vaga.text)
+			while True:
+				# Loop para ter certeza que as informações da vaga foram carregados
+				try:
+					# Capta os dados da vaga
+					informacoes_da_vaga = driver.find_element(By.XPATH, '/html/body/main/div[2]/form/div/div[2]/div')
+				except:
+					pass
+				else:
+					# Caso os dados da vaga não tenham carregados, seu valor será zero, reiniciando o loop
+					if len(informacoes_da_vaga.text) > 0:
+						break
+			# Caso o loop anterior tenha terminado com êxito, os dados vão para tratamento
+			tratar_dados(informacoes_da_vaga.text)
 
-
+			# Após o tratamento da vaga anterior, parte para a próxima
 			numero_vaga += 1
-	print(quantidade_de_vagas)
 
-# /html/body/main/div[2]/form/div/div[1]/div[2]/div[1]
-# /html/body/main/div[2]/form/div/div[1]/div[2]/div[1]
 
-buscador_de_vaga()
+def menu(msg, opcoes):
+	# lista de opcoes para o menu
+	opcoes = opcoes.split(", ")
+	nmr_opcoes = len(opcoes)
+	# Menu de escolha
+	menu_titulo_adicional = "."
+	while True:
+		system("cls")
+		print("MENU" + menu_titulo_adicional)
+		for n_opc, opc in enumerate(opcoes):
+			print(f"[{n_opc+1}] - {opc.upper()}")
+		saida = input(msg)
+		try:
+			saida = int(saida)
+		except:
+			menu_titulo_adicional = ". Opção inválida! Tente um número."
+		else:
+			if 0 < saida < nmr_opcoes+1:
+				break
+			else:
+				menu_titulo_adicional = f". Opção inválida! Tente um número entre 1 e {nmr_opcoes}."
+	return saida
+
+
+def visualizador_de_vagas(opc=1):
+	if opc == 1:
+		# Neste caso voce podera escolher entre todas as listas de vagas encontradas até o momento
+		lista_de_vagas_coletadas = [arquivo for arquivo in listdir() if "json" in arquivo]
+		escolha = menu("Qual arquivo deseja visualizar: ", ", ".join(lista_de_vagas_coletadas)) - 1 # Menos 1 pois os index começam em 0
+
+		arquivo_selecionado = importar_arquivo(lista_de_vagas_coletadas[escolha])
+	else:
+		# Neste else, voce vera apenas a lista de vagas novas
+		arquivo_selecionado = importar_arquivo("vagas_novas.json")
+
+	for id_vaga, descricao in arquivo_selecionado.items():
+		system("cls")
+		desc = descricao["descricao"]
+		print(desc)
+		input("\nTecle enter para proxima vaga...")
+
+		escolha_atual = menu("Escolha: ", "Proxima Vaga, sair")
+		if escolha_atual == 2:
+			break
+
+
+while True:
+	if tem_novas_vagas:
+		escolha = menu("O que deseja: ", "Escanear vagas, Olhar Vagas Encontradas, Sair, Ver novas vagas")
+	else:
+		escolha = menu("O que deseja: ", "Escanear vagas, Olhar Vagas Encontradas, Sair")
+	system("cls")
+	if escolha == 3:
+		break
+	elif escolha == 2:
+		visualizador_de_vagas()
+	elif escolha == 4:
+		visualizador_de_vagas(2)
+	elif escolha == 1:
+		print("Ok! Procurando novas vagas")
+		iniciar_driver()
+		aceitar_cookies()
+		buscador_de_vaga()
 
 # Fecha o navegador
 driver.quit()
+exit()
 
