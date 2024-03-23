@@ -5,6 +5,23 @@ from os import system, listdir
 from time import strftime as st
 import json
 
+
+"""
+Script simples que capta vagas de emprego de um determinado site (infojobs), faz o tratamento de dados e os aramzena em um arquivo json;
+Principais funções:
+	> Captar vagas de emprego de acordo com a cidade informada;
+	> Roda todas as páginas, uma à uma, pegando vaga por vaga;
+	> Armazena as vagas em um arquivo JSON;
+	> Consegue definir se houve alguma vaga nova publicada;
+	> Consegue navegar por vagas anteriores.
+
+Possíveis Bugs:
+	> Se a cidade informada tiver poucas vagas (apenas uma página), vai dar erro;
+	> A mesma vaga vai para o tratamento de dados mais de uma vez.
+
+
+"""
+
 # Data para criação do nome do novo arquivo
 data_atual = f'{st("%Y")}-{st("%m")}-{st("%d")}-{st("%H")}{st("%M")}'
 tem_novas_vagas = False
@@ -67,21 +84,22 @@ def exportar_dados(dados_vaga, nome_arquivo=""):
 def importar_arquivo(nome_arquivo):
 	arquivo = open(nome_arquivo)
 	saida = arquivo.read() # Abre o arquivo para leitura, em formato string
-	saida = json.loads(saida) # Converte de string para dicionario
+	saida = json.loads(saida) # Converte de string para dicionario (pelo formato que os dados foram armazenados)
 	arquivo.close()
 	return saida
 
 
 def tratar_dados(dados_vaga):
 	global dados_das_vagas
-	# O cargo sempre é exibido no topo do detalhamento da vaga
-	cargo = dados_vaga.split("\n")[0] # Particiona toda a informação e pega apenas o Primeiro item (o cargo)
+	# O cargo sempre é exibido no topo do detalhamento da vaga, no caso a primeira linha dos dados
+	cargo = dados_vaga.split("\n")[0] # Particiona toda a informação, pelo caractere de quebra de linha("\n"), e pega apenas o Primeiro item (o cargo)
 
 	# Cria um ID, afinal coleções em forma de dicionario aceitam apenas chaves exclusivas, e podem haver vagas com mesmo nome
+	# O ID consiste em um numero de 6 dígitos, sendo a quantidade total de caracteres que coontém na descrição da vaga, mais o  "cargo", captado anteriormente.
 	# se houver uma vaga com mesmo nome e mesma quantidade de caracteres será muita coincidencia (improvável).
 	id_vaga = f"{len(dados_vaga):0>6}_" + cargo.split()[0].upper()
 
-	# Infelizmente o buscador de vagas as vezes retorna a mesma vaga duas vezes, este if garante que a mesma seja tratada apenas uma vez
+	# O buscador de vagas as vezes retorna a mesma vaga mais de uma vez, com preguça de identificar o erro, fiz este if, que garante que a vaga seja tratada apenas uma vez
 	if id_vaga not in dados_das_vagas:
 		print(cargo)
 		dados_das_vagas[id_vaga] = {}
