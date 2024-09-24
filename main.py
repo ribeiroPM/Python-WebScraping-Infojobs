@@ -28,7 +28,7 @@ tem_novas_vagas = False
 
 # Variaveis Globais
 dados_das_vagas = {} # Coleção com todos os Dados Captados
-local = input("Diga sua cidade: ").strip().lower()
+local = "Taubate"#input("Diga sua cidade: ").strip().lower()
 link = f"https://www.infojobs.com.br/vagas-de-emprego-{local}.aspx?page=1&campo=griddate&orden=desc"
 
 # Instancia as opcoes de janela e outros atributos
@@ -130,11 +130,15 @@ def buscador_de_vaga():
 	numero_vaga = 1
 	numero_proxima_pagina = 2
 	quantidade_de_vagas = 0
+	global a
 	while True:
 		try:
 			# Tentará achar as vagas na página em questão
-			vaga = driver.find_element(By.XPATH, f'/html/body/main/div[2]/form/div/div[1]/div[2]/div[{numero_vaga}]')
+			# vaga = driver.find_element(By.XPATH, f'/html/body/main/div[2]/form/div/div[1]/div[2]/div[{numero_vaga}]')
+			vaga = driver.find_element(By.XPATH, f'//*[@id="filterSideBar"]/div/div[{numero_vaga}]')
+			//*[@id="filterSideBar"]/div[6]/div[2]
 		except:
+			print("Erro")
 			if checar_final_pagina(numero_proxima_pagina):
 				# Se possível, irá para outra página
 				# Sleep para dar tempo de carregar a nova página
@@ -162,11 +166,15 @@ def buscador_de_vaga():
 					if len(informacoes_da_vaga.text) > 0:
 						break
 			# Caso o loop anterior tenha terminado com êxito, os dados vão para tratamento
+			print(a)
+			# print(informacoes_da_vaga.text)
+
+			a+=1
 			tratar_dados(informacoes_da_vaga.text)
 
 			# Após o tratamento da vaga anterior, parte para a próxima
 			numero_vaga += 1
-
+a = 0
 
 def menu(msg, opcoes):
 	# lista de opcoes para o menu
